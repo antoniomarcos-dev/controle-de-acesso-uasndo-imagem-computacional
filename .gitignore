@@ -1,0 +1,34 @@
+# Virtual Environments
+venv/
+env/
+.env/
+.venv/
+ENV/
+
+# Python Cache
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# IDEs / Editores
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Arquivos de Dados Locais do Smart Counter
+backend/storage/
+*.csv
+
+# Modelos pesados de Deep Learning (Baixados via script)
+models/*.pb
+models/*.caffemodel
+models/*.prototxt
+# Ignora o YOLOv8
+*.pt
+runs/
+
+# Logs e arquivos de execução
+*.log
+.DS_Store
