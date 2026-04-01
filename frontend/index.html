@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Smart Counter AI — Painel de Monitoramento</title>
+    <meta name="description" content="Sistema de contagem inteligente de pessoas com estimativa de gênero e idade por IA">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/static/css/style.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body>
+    <!-- Efeito de fundo animado -->
+    <div class="bg-glow glow-1"></div>
+    <div class="bg-glow glow-2"></div>
+
+    <div class="app">
+        <!-- ═══ HEADER ═══ -->
+        <header class="header">
+            <div class="header-left">
+                <div class="logo-icon">
+                    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"/><polyline points="10 17 15 12 10 7"/><line x1="15" y1="12" x2="3" y2="12"/></svg>
+                </div>
+                <div>
+                    <h1 class="logo-text">Smart Counter <span class="accent">AI</span></h1>
+                    <p class="logo-sub">Monitoramento Inteligente de Fluxo</p>
+                </div>
+            </div>
+            <div class="header-right">
+                <button id="btn-shutdown" class="icon-btn" title="Encerrar Sistema" style="color: #ef4444; margin-right: 4px;">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18.36 6.64a9 9 0 1 1-12.73 0"></path><line x1="12" y1="2" x2="12" y2="12"></line></svg>
+                </button>
+                <button id="btn-settings" class="icon-btn" title="Configurações">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
+                </button>
+                <div class="live-badge">
+                    <span class="live-dot"></span>
+                    AO VIVO
+                </div>
+                <div class="clock" id="clock">--:--:--</div>
+            </div>
+        </header>
+
+        <!-- ═══ KPI CARDS ═══ -->
+        <section class="kpi-row">
+            <div class="kpi-card kpi-present">
+                <div class="kpi-icon">
+                    <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+                </div>
+                <div class="kpi-data">
+                    <span class="kpi-label">No Ambiente</span>
+                    <span class="kpi-value" id="kpi-current">0</span>
+                </div>
+                <div class="kpi-spark" id="spark-current"></div>
+            </div>
+
+            <div class="kpi-card kpi-entries">
+                <div class="kpi-icon">
+                    <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"/><polyline points="10 17 15 12 10 7"/><line x1="15" y1="12" x2="3" y2="12"/></svg>
+                </div>
+                <div class="kpi-data">
+                    <span class="kpi-label">Entradas</span>
+                    <span class="kpi-value" id="kpi-entries">0</span>
+                </div>
+            </div>
+
+            <div class="kpi-card kpi-exits">
+                <div class="kpi-icon">
+                    <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+                </div>
+                <div class="kpi-data">
+                    <span class="kpi-label">Saídas</span>
+                    <span class="kpi-value" id="kpi-exits">0</span>
+                </div>
+            </div>
+        </section>
+
+        <!-- ═══ GRÁFICOS ═══ -->
+        <section class="charts-row">
+            <div class="card chart-card">
+                <div class="card-header">
+                    <h2>Distribuição por Gênero</h2>
+                    <span class="badge badge-blue">IA</span>
+                </div>
+                <div class="chart-wrap">
+                    <canvas id="genderChart"></canvas>
+                </div>
+                <div class="gender-legend" id="gender-legend">
+                    <div class="legend-item">
+                        <span class="legend-dot" style="background:#6366f1"></span>
+                        <span>Masculino</span>
+                        <strong id="g-male">0</strong>
+                    </div>
+                    <div class="legend-item">
+                        <span class="legend-dot" style="background:#ec4899"></span>
+                        <span>Feminino</span>
+                        <strong id="g-female">0</strong>
+                    </div>
+                    <div class="legend-item">
+                        <span class="legend-dot" style="background:#475569"></span>
+                        <span>N/I</span>
+                        <strong id="g-unknown">0</strong>
+                    </div>
+                </div>
+            </div>
+
+            <div class="card chart-card">
+                <div class="card-header">
+                    <h2>Faixa Etária</h2>
+                    <span class="badge badge-green">Estimativa</span>
+                </div>
+                <div class="chart-wrap">
+                    <canvas id="ageChart"></canvas>
+                </div>
+            </div>
+        </section>
+
+        <!-- ═══ TIMELINE ═══ -->
+        <section class="card timeline-card">
+            <div class="card-header">
+                <h2>Registro de Eventos</h2>
+                <span class="badge badge-neutral" id="event-count">0 eventos</span>
+            </div>
+            <div class="timeline-list" id="timeline-list">
+                <p class="timeline-empty">Aguardando detecções...</p>
+            </div>
+        </section>
+
+        <!-- ═══ FOOTER ═══ -->
+        <footer class="footer">
+            <span>Smart Counter AI &copy; 2026 — Sistema Local Offline</span>
+        </footer>
+    </div>
+
+    <!-- ═══ MODAL SETTINGS ═══ -->
+    <div id="settings-modal" class="modal-backdrop">
+        <div class="modal">
+            <div class="modal-header">
+                <h2>Configurações do Detector</h2>
+                <button id="btn-close-settings" class="icon-btn">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+                </button>
+            </div>
+            <div class="modal-body">
+                <div class="setting-item">
+                    <div>
+                        <span class="setting-title">Espelhar Câmera</span>
+                        <span class="setting-desc">Inverte a imagem (ajuda se a câmera estiver invertida na parede)</span>
+                    </div>
+                    <label class="switch">
+                        <input type="checkbox" id="conf-mirror">
+                        <span class="slider round"></span>
+                    </label>
+                </div>
+                
+                <div class="setting-item">
+                    <div>
+                        <span class="setting-title">Inverter Entra/Sai</span>
+                        <span class="setting-desc">Troca qual lado é considerado entrada ou saída</span>
+                    </div>
+                    <label class="switch">
+                        <input type="checkbox" id="conf-swap">
+                        <span class="slider round"></span>
+                    </label>
+                </div>
+
+                <div class="setting-item vertical">
+                    <div>
+                        <span class="setting-title">Rigor na Detecção Facial: <span id="face-conf-val">35%</span></span>
+                        <span class="setting-desc">Aumente se o sistema estiver "chutando" gênero em não-rostos</span>
+                    </div>
+                    <input type="range" id="conf-face" min="10" max="90" value="35" class="range-slider">
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button id="btn-reset-data" class="btn btn-danger">Zerar Contagem</button>
+                <button id="btn-save-settings" class="btn btn-primary">Salvar Ajustes</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="/static/js/app.js"></script>
+</body>
+</html>
