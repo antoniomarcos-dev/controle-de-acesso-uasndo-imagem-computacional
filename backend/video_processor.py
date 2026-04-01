@@ -44,78 +44,62 @@ class VideoProcessor:
         print("[SMART-COUNTER] Carregando YOLOv8n...")
         self.yolo = YOLO('yolov8n.pt')
 
-        # ── Modelos Demográficos (OpenCV DNN) ─────────────────
-        base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-        models_dir = os.path.join(base_dir, 'models')
-        self.has_demographics = False
-
-        face_pb    = os.path.join(models_dir, "opencv_face_detector_uint8.pb")
-        face_pbtxt = os.path.join(models_dir, "opencv_face_detector.pbtxt")
-        age_model  = os.path.join(models_dir, "age_net.caffemodel")
-        age_proto  = os.path.join(models_dir, "age_deploy.prototxt")
-        gen_model  = os.path.join(models_dir, "gender_net.caffemodel")
-        gen_proto  = os.path.join(models_dir, "gender_deploy.prototxt")
-
-        needed = [face_pb, face_pbtxt, age_model, age_proto, gen_model, gen_proto]
-        if all(os.path.exists(f) for f in needed):
-            print("[SMART-COUNTER] Modelos demográficos encontrados. Carregando...")
-            self.face_net   = cv2.dnn.readNet(face_pb, face_pbtxt)
-            self.age_net    = cv2.dnn.readNet(age_model, age_proto)
-            self.gender_net = cv2.dnn.readNet(gen_model, gen_proto)
+        # ── Modelos Demográficos (DeepFace) ─────────────────
+        print("[SMART-COUNTER] Preparando DeepFace para extração de gênero/idade...")
+        try:
+            from deepface import DeepFace
             self.has_demographics = True
-            print("[SMART-COUNTER] Modelos demográficos carregados com sucesso!")
-        else:
-            missing = [os.path.basename(f) for f in needed if not os.path.exists(f)]
-            print(f"[SMART-COUNTER] AVISO: Modelos demográficos ausentes: {missing}")
-            print("[SMART-COUNTER] Rode: python scripts/download_models.py")
+            print("[SMART-COUNTER] DeepFace ativado com sucesso!")
+        except ImportError:
+            self.has_demographics = False
+            print("[SMART-COUNTER] AVISO: DeepFace ausente. Execute: pip install deepface tf-keras")
 
+        # Mantemos apenas para legado de labels, a conversão é feita no storage
         self.AGE_BUCKETS = ['(0-2)', '(4-6)', '(8-12)', '(15-20)', '(25-32)', '(38-43)', '(48-53)', '(60-100)']
         self.GENDER_LABELS = ['Male', 'Female']
-        self.MEAN_VALUES = (78.4263377603, 87.7689143744, 114.895847746)
 
-    # ── Detecção de Rosto ────────────────────────────────────────
-    def _detect_faces(self, image, conf=0.45):
-        """Detecta rostos no recorte do corpo usando o SSD Face Detector."""
-        h, w = image.shape[:2]
-        if h < 20 or w < 20:
-            return []
-
-        blob = cv2.dnn.blobFromImage(image, 1.0, (300, 300), [104, 117, 123], swapRB=False, crop=False)
-        self.face_net.setInput(blob)
-        detections = self.face_net.forward()
-
-        faces = []
-        for i in range(detections.shape[2]):
-            confidence = float(detections[0, 0, i, 2])
-            if confidence > conf:
-                x1 = max(0, int(detections[0, 0, i, 3] * w) - 15)
-                y1 = max(0, int(detections[0, 0, i, 4] * h) - 15)
-                x2 = min(w, int(detections[0, 0, i, 5] * w) + 15)
-                y2 = min(h, int(detections[0, 0, i, 6] * h) + 15)
-                if (x2 - x1) > 10 and (y2 - y1) > 10:
-                    faces.append((x1, y1, x2, y2, confidence))
-        return faces
-
-    # ── Predição de Idade e Gênero ───────────────────────────────
-    def _predict_demographics(self, face_img):
-        """Prediz gênero e faixa etária a partir de um crop facial."""
-        if face_img.size == 0 or face_img.shape[0] < 10 or face_img.shape[1] < 10:
+    # ── Predição de Idade e Gênero (Via DeepFace) ────────────────
+    def _predict_demographics(self, image_crop):
+        """Usa DeepFace para estimar gênero e idade acurados de um corte."""
+        if image_crop.size == 0:
             return None, None
 
         try:
-            blob = cv2.dnn.blobFromImage(face_img, 1.0, (227, 227), self.MEAN_VALUES, swapRB=False)
+            from deepface import DeepFace
+            # analyze tenta detectar o rosto dentro do crop e analisa
+            results = DeepFace.analyze(
+                img_path=image_crop,
+                actions=['age', 'gender'],
+                enforce_detection=False,
+                silent=True
+            )
+            
+            res = results[0] if isinstance(results, list) else results
+            
+            # Mapeia "Woman"/"Man" para nosso padrao
+            dom_g = res.get('dominant_gender')
+            if dom_g == 'Man':
+                gender = 'Male'
+            elif dom_g == 'Woman':
+                gender = 'Female'
+            else:
+                gender = 'Unknown'
 
-            self.gender_net.setInput(blob)
-            g_preds = self.gender_net.forward()
-            gender = self.GENDER_LABELS[g_preds[0].argmax()]
+            deep_age = res.get('age', 0)
+            
+            # Transforma idade precisa nos buckets do legacy
+            if deep_age <= 12:
+                age_cat = '(8-12)'
+            elif deep_age <= 32:
+                age_cat = '(25-32)'
+            elif deep_age <= 53:
+                age_cat = '(38-43)'
+            else:
+                age_cat = '(60-100)'
 
-            self.age_net.setInput(blob)
-            a_preds = self.age_net.forward()
-            age = self.AGE_BUCKETS[a_preds[0].argmax()]
-
-            return gender, age
+            return gender, age_cat
         except Exception as e:
-            print(f"[SMART-COUNTER] Erro na predição demográfica: {e}")
+            # Em caso de falha oculta da IA, descarta no quadro atual
             return None, None
 
     # ── Modo Estatístico (Moda) ──────────────────────────────────
@@ -127,7 +111,7 @@ class VideoProcessor:
         return max(set(lst), key=lst.count)
 
     # ── Processamento de Frame ───────────────────────────────────
-    def process_frame(self, frame):
+    def process_frame(self, frame, frame_count=0):
         """Pipeline completo: YOLO → Track → Demographics → Line Crossing."""
         # Aplicar espelhamento se configurado no painel
         if getattr(self, 'mirror_camera', False):
@@ -143,11 +127,11 @@ class VideoProcessor:
         # (fundamental para que o face detector não confunda anotações com rostos)
         clean_frame = frame.copy()
 
-        # ── YOLO + BoT-SORT Tracking ─────────────────────────
+        # ── YOLO + ByteTrack Tracking (Otimizado p/ CPU) ──
         results = self.yolo.track(
             frame, persist=True, classes=[0],
-            verbose=False, tracker="botsort.yaml",
-            conf=0.4, iou=0.5
+            verbose=False, tracker="bytetrack.yaml",
+            conf=0.4, iou=0.5, imgsz=480
         )
 
         if results and results[0].boxes and results[0].boxes.id is not None:
@@ -169,27 +153,22 @@ class VideoProcessor:
                 self.tracked_objects[tid]['positions'].append(cx)
                 demo = self.demographics[tid]
 
-                # ── Estimar dados demográficos (até 8 tentativas, no frame LIMPO) ──
-                if self.has_demographics and demo['final_g'] is None and len(demo['genders']) < 8:
+                # ── Estimar dados demográficos (máx 3 tentativas, com escalonamento por ID) ──
+                # Usa (frame_count + tid) % 10 == 0 para diluir a carga pesada entre os frames,
+                # e exige menos tentativas (3) para não segurar o processador.
+                if self.has_demographics and demo['final_g'] is None and len(demo['genders']) < 3 and (frame_count + tid) % 10 == 0:
                     box_h = y2 - y1
                     # Pega os 55% superiores do corpo (onde fica o rosto)
                     crop_y2 = y1 + int(box_h * 0.55)
                     upper_body = clean_frame[max(0, y1):min(h, crop_y2), max(0, x1):min(w, x2)]
 
                     if upper_body.size > 0:
-                        conf_thresh = getattr(self, 'face_conf_threshold', 0.35)
-                        faces = self._detect_faces(upper_body, conf=conf_thresh)
-                        if faces:
-                            # Pega o rosto com maior confiança
-                            best = max(faces, key=lambda f: f[4])
-                            fx1, fy1, fx2, fy2, _ = best
-                            face_crop = upper_body[fy1:fy2, fx1:fx2]
-                            gender, age = self._predict_demographics(face_crop)
-                            if gender and age:
-                                demo['genders'].append(gender)
-                                demo['ages'].append(age)
+                        gender, age = self._predict_demographics(upper_body)
+                        if gender and age:
+                            demo['genders'].append(gender)
+                            demo['ages'].append(age)
 
-                # ── Consolidar após 3+ amostras ──
+                # ── Consolidar após 3+ amostras (ou menos se a pessoa cruzar a linha em breve) ──
                 if demo['final_g'] is None and len(demo['genders']) >= 3:
                     demo['final_g'] = self._mode(demo['genders'])
                     demo['final_a'] = self._mode(demo['ages'])
@@ -307,12 +286,13 @@ class VideoProcessor:
             self.running = False
             return
 
-        # Configurar resolução adequada (720p para balancear qualidade/performance)
-        cap.set(cv2.CAP_PROP_FRAME_WIDTH, 1280)
-        cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 720)
+        # Configurar resolução ágil para CPU (480p)
+        cap.set(cv2.CAP_PROP_FRAME_WIDTH, 640)
+        cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 480)
 
         print("[SMART-COUNTER] Pipeline de visão computacional iniciado!")
         frame_count = 0
+        total_frames = 0
         t_start = time.time()
 
         while self.running:
@@ -321,8 +301,9 @@ class VideoProcessor:
                 time.sleep(0.01)
                 continue
 
-            out_frame = self.process_frame(frame)
+            out_frame = self.process_frame(frame, total_frames)
             frame_count += 1
+            total_frames += 1
 
             # Calcular FPS real
             elapsed = time.time() - t_start
@@ -335,10 +316,11 @@ class VideoProcessor:
             cv2.putText(out_frame, f"{self.fps:.0f} FPS", (out_frame.shape[1] - 80, out_frame.shape[0] - 12),
                         cv2.FONT_HERSHEY_SIMPLEX, 0.4, (120, 120, 120), 1, cv2.LINE_AA)
 
-            cv2.imshow("Smart Counter AI - Camera View", out_frame)
-            key = cv2.waitKey(1) & 0xFF
-            if key == 27:  # ESC
-                break
+            # Codificar frame e atualizar buffer de streaming seguro
+            ret_encode, buffer = cv2.imencode('.jpg', out_frame, [int(cv2.IMWRITE_JPEG_QUALITY), 80])
+            if ret_encode:
+                with self.frame_lock:
+                    self.latest_frame = buffer.tobytes()
 
         cap.release()
         cv2.destroyAllWindows()

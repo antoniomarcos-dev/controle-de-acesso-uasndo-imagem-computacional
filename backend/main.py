@@ -1,6 +1,6 @@
 from fastapi import FastAPI, BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse, HTMLResponse
+from fastapi.responses import FileResponse, HTMLResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 import uvicorn
@@ -93,6 +93,26 @@ def fetch_stats():
     return storage.get_current_stats()
 
 
+def video_generator():
+    """Gera um fluxo continuo de frames em MJPEG."""
+    import time
+    while True:
+        if processor and processor.latest_frame:
+            with processor.frame_lock:
+                frame = processor.latest_frame
+            yield (b'--frame\r\n'
+                   b'Content-Type: image/jpeg\r\n\r\n' + frame + b'\r\n')
+        else:
+            time.sleep(0.1)
+
+
+@app.get("/api/video_feed")
+def video_feed():
+    """Endpoint para streaming MJPEG do processamento de video."""
+    return StreamingResponse(video_generator(), media_type="multipart/x-mixed-replace; boundary=frame")
+
+
+
 class ConfigPayload(BaseModel):
     mirror_camera: bool
     swap_direction: bool
@@ -120,7 +140,10 @@ def set_config(payload: ConfigPayload):
 @app.post("/api/reset")
 def reset_stats():
     """Reseta as estatisticas (apaga o CSV e limpa o cache)."""
-    storage.init_storage()
+    storage.clear_storage()
+    if processor:
+        processor.tracked_objects.clear()
+        processor.demographics.clear()
     return {"status": "ok"}
 
 
