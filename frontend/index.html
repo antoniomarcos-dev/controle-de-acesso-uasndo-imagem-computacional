@@ -3,30 +3,60 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Smart Counter AI — Painel de Monitoramento</title>
-    <meta name="description" content="Sistema de contagem inteligente de pessoas com estimativa de gênero e idade por IA">
+    <title>Ceres Security AI — Painel de Segurança Integrada</title>
+    <meta name="description" content="Sistema de segurança integrada com reconhecimento facial, leitura de placas e controle de acesso por visão computacional">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="/static/css/style.css">
+    <style>
+        .form-select {
+            background: rgba(255,255,255,0.05);
+            border: 1px solid var(--border);
+            color: var(--text-primary);
+            padding: 6px 12px;
+            border-radius: var(--radius-sm);
+            font-family: inherit;
+            font-size: 0.8rem;
+            outline: none;
+            cursor: pointer;
+        }
+        .form-select option {
+            background: var(--bg-secondary);
+            color: var(--text-primary);
+        }
+    </style>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </head>
 <body>
     <!-- Efeito de fundo animado -->
     <div class="bg-glow glow-1"></div>
     <div class="bg-glow glow-2"></div>
+    <div class="bg-glow glow-3"></div>
 
     <div class="app">
         <!-- ═══ HEADER ═══ -->
         <header class="header">
             <div class="header-left">
                 <div class="logo-icon">
-                    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"/><polyline points="10 17 15 12 10 7"/><line x1="15" y1="12" x2="3" y2="12"/></svg>
+                    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
                 </div>
                 <div>
-                    <h1 class="logo-text">Smart Counter <span class="accent">AI</span></h1>
-                    <p class="logo-sub">Monitoramento Inteligente de Fluxo</p>
+                    <h1 class="logo-text">Ceres Security <span class="accent">AI</span></h1>
+                    <p class="logo-sub">Sistema de Segurança Integrada</p>
                 </div>
             </div>
             <div class="header-right">
+                <!-- Modo Toggle -->
+                <div class="mode-toggle" id="mode-toggle">
+                    <button id="btn-mode-cidade" class="mode-btn active" title="Modo Cidade">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 21h18M9 8h1M9 12h1M9 16h1M14 8h1M14 12h1M14 16h1M5 21V5a2 2 0 012-2h10a2 2 0 012 2v16"/></svg>
+                        <span>Cidade</span>
+                    </button>
+                    <button id="btn-mode-evento" class="mode-btn" title="Modo Evento">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg>
+                        <span>Evento</span>
+                    </button>
+                </div>
+
                 <button id="btn-shutdown" class="icon-btn" title="Encerrar Sistema" style="color: #ef4444; margin-right: 4px;">
                     <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18.36 6.64a9 9 0 1 1-12.73 0"></path><line x1="12" y1="2" x2="12" y2="12"></line></svg>
                 </button>
@@ -41,15 +71,60 @@
             </div>
         </header>
 
-        <!-- ═══ FEED DE VÍDEO ═══ -->
+        <!-- ═══ ALERT BANNER (dinâmico) ═══ -->
+        <div id="alert-banner" class="alert-banner hidden">
+            <div class="alert-banner-content">
+                <span class="alert-banner-icon" id="alert-icon">⚠</span>
+                <span class="alert-banner-text" id="alert-text">Nenhum alerta</span>
+                <button class="alert-banner-dismiss" id="alert-dismiss">✕</button>
+            </div>
+        </div>
+
+        <!-- ═══ FEED DE VÍDEO + ALPR ═══ -->
         <section class="video-row">
-            <div class="card">
+            <div class="card video-card">
                 <div class="card-header">
                     <h2>Câmera ao Vivo / Processamento YOLO</h2>
                     <span class="badge badge-red">LIVE</span>
                 </div>
                 <div class="video-wrap">
                     <img src="/api/video_feed" id="video-stream" alt="Processamento de Visão Computacional" onerror="this.src='data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIxMDAlIiBoZWlnaHQ9IjEwMCUiPjxyZWN0IHdpZHRoPSIxMDAlIiBoZWlnaHQ9IjEwMCUiIGZpbGw9IiMzMzMiIC8+PHRleHQgeD0iNTAlIiB5PSI1MCUiIGZpbGw9IiM5OTkiIGZvbnQtZmFtaWx5PSJBcmlhbCIgZm9udC1zaXplPSIyMCIgdGV4dC1hbmNob3I9Im1pZGRsZSI+Q2FtZXJhIG9mZmxpbmU8L3RleHQ+PC9zdmc+';" />
+                </div>
+            </div>
+
+            <!-- Painel lateral: ALPR + Gate -->
+            <div class="side-panel">
+                <!-- Cancela Virtual (Modo Evento) -->
+                <div class="card gate-card" id="gate-card">
+                    <div class="card-header">
+                        <h2>Cancela Virtual</h2>
+                        <span class="badge badge-green" id="gate-badge">ABERTA</span>
+                    </div>
+                    <div class="gate-visual" id="gate-visual">
+                        <div class="gate-bar" id="gate-bar"></div>
+                        <div class="gate-label" id="gate-label">PASSAGEM LIVRE</div>
+                    </div>
+                    <div class="gate-actions">
+                        <button class="btn btn-sm btn-success" id="btn-gate-open" title="Liberar Cancela">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>
+                            Liberar
+                        </button>
+                        <button class="btn btn-sm btn-danger" id="btn-gate-block" title="Bloquear Cancela">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                            Bloquear
+                        </button>
+                    </div>
+                </div>
+
+                <!-- ALPR — Últimas Placas -->
+                <div class="card alpr-card">
+                    <div class="card-header">
+                        <h2>ALPR — Placas</h2>
+                        <span class="badge badge-blue">OCR</span>
+                    </div>
+                    <div class="alpr-list" id="alpr-list">
+                        <p class="empty-state">Aguardando detecção de placas...</p>
+                    </div>
                 </div>
             </div>
         </section>
@@ -64,9 +139,7 @@
                     <span class="kpi-label">No Ambiente</span>
                     <span class="kpi-value" id="kpi-current">0</span>
                 </div>
-                <div class="kpi-spark" id="spark-current"></div>
             </div>
-
             <div class="kpi-card kpi-entries">
                 <div class="kpi-icon">
                     <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"/><polyline points="10 17 15 12 10 7"/><line x1="15" y1="12" x2="3" y2="12"/></svg>
@@ -76,7 +149,6 @@
                     <span class="kpi-value" id="kpi-entries">0</span>
                 </div>
             </div>
-
             <div class="kpi-card kpi-exits">
                 <div class="kpi-icon">
                     <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
@@ -84,6 +156,33 @@
                 <div class="kpi-data">
                     <span class="kpi-label">Saídas</span>
                     <span class="kpi-value" id="kpi-exits">0</span>
+                </div>
+            </div>
+            <div class="kpi-card kpi-alerts-green">
+                <div class="kpi-icon kpi-icon-green">
+                    <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+                </div>
+                <div class="kpi-data">
+                    <span class="kpi-label">Liberados</span>
+                    <span class="kpi-value" id="kpi-verde">0</span>
+                </div>
+            </div>
+            <div class="kpi-card kpi-alerts-yellow">
+                <div class="kpi-icon kpi-icon-yellow">
+                    <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+                </div>
+                <div class="kpi-data">
+                    <span class="kpi-label">Alertas</span>
+                    <span class="kpi-value" id="kpi-amarelo">0</span>
+                </div>
+            </div>
+            <div class="kpi-card kpi-alerts-red">
+                <div class="kpi-icon kpi-icon-red">
+                    <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>
+                </div>
+                <div class="kpi-data">
+                    <span class="kpi-label">Bloqueios</span>
+                    <span class="kpi-value" id="kpi-vermelho">0</span>
                 </div>
             </div>
         </section>
@@ -128,20 +227,34 @@
             </div>
         </section>
 
-        <!-- ═══ TIMELINE ═══ -->
-        <section class="card timeline-card">
-            <div class="card-header">
-                <h2>Registro de Eventos</h2>
-                <span class="badge badge-neutral" id="event-count">0 eventos</span>
+        <!-- ═══ ALERTAS + TIMELINE ═══ -->
+        <section class="bottom-row">
+            <!-- Painel de Alertas -->
+            <div class="card alerts-card">
+                <div class="card-header">
+                    <h2>Alertas de Segurança</h2>
+                    <span class="badge badge-red" id="alerts-count">0 alertas</span>
+                </div>
+                <div class="alerts-list" id="alerts-list">
+                    <p class="empty-state">Nenhum alerta ativo</p>
+                </div>
             </div>
-            <div class="timeline-list" id="timeline-list">
-                <p class="timeline-empty">Aguardando detecções...</p>
+
+            <!-- Timeline de Eventos -->
+            <div class="card timeline-card">
+                <div class="card-header">
+                    <h2>Registro de Eventos</h2>
+                    <span class="badge badge-neutral" id="event-count">0 eventos</span>
+                </div>
+                <div class="timeline-list" id="timeline-list">
+                    <p class="timeline-empty">Aguardando detecções...</p>
+                </div>
             </div>
         </section>
 
         <!-- ═══ FOOTER ═══ -->
         <footer class="footer">
-            <span>Smart Counter AI &copy; 2026 — Sistema Local Offline</span>
+            <span>Ceres Security AI &copy; 2026 — Sistema de Segurança Integrada</span>
         </footer>
     </div>
 
@@ -149,7 +262,7 @@
     <div id="settings-modal" class="modal-backdrop">
         <div class="modal">
             <div class="modal-header">
-                <h2>Configurações do Detector</h2>
+                <h2>Configurações do Sistema</h2>
                 <button id="btn-close-settings" class="icon-btn">
                     <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
                 </button>
@@ -165,7 +278,7 @@
                         <span class="slider round"></span>
                     </label>
                 </div>
-                
+
                 <div class="setting-item">
                     <div>
                         <span class="setting-title">Inverter Entra/Sai</span>
@@ -175,6 +288,18 @@
                         <input type="checkbox" id="conf-swap">
                         <span class="slider round"></span>
                     </label>
+                </div>
+
+                <div class="setting-item">
+                    <div>
+                        <span class="setting-title">Fonte da Câmera</span>
+                        <span class="setting-desc">Selecione o dispositivo de vídeo</span>
+                    </div>
+                    <select id="conf-camera" class="form-select">
+                        <option value="0">Cam 0 (Padrão)</option>
+                        <option value="1">Cam 1 (USB/Externa)</option>
+                        <option value="2">Cam 2 (Geralmente Virtual)</option>
+                    </select>
                 </div>
 
                 <div class="setting-item vertical">

@@ -1,9 +1,27 @@
+# ═══ Core Framework ═══
 fastapi>=0.100.0
 uvicorn>=0.23.0
+python-multipart
+python-dotenv
+
+# ═══ Visão Computacional ═══
 ultralytics>=8.0.0
 opencv-python>=4.8.0
 numpy>=1.24.0
-python-multipart
+
+# ═══ Análise Facial ═══
+tensorflow>=2.14.0
+tf-keras>=2.14.0
+deepface
+
+# ═══ ALPR (Leitura de Placas) ═══
+easyocr>=1.7.0
+
+# ═══ Banco de Dados ═══
+psycopg2-binary>=2.9.0
+
+# ═══ Utilitários ═══
 pandas
-psycopg2-binary
-python-dotenv
+Pillow>=10.0.0
+tqdm>=4.30.0
+gdown>=3.10.1
