@@ -342,6 +342,7 @@ function updateModeUI(modo) {
     const btnCidade = document.getElementById('btn-mode-cidade');
     const btnEvento = document.getElementById('btn-mode-evento');
     const gateCard = document.getElementById('gate-card');
+    const settingSwap = document.getElementById('setting-item-swap');
 
     if (!btnCidade || !btnEvento) return;
 
@@ -350,10 +351,12 @@ function updateModeUI(modo) {
         btnEvento.classList.remove('active');
         btnEvento.classList.add('active-event');
         if (gateCard) gateCard.style.display = '';
+        if (settingSwap) settingSwap.style.display = 'flex';
     } else {
         btnEvento.classList.remove('active-event');
         btnCidade.classList.add('active');
-        if (gateCard) gateCard.style.opacity = '0.5';
+        if (gateCard) gateCard.style.display = 'none';
+        if (settingSwap) settingSwap.style.display = 'none';
     }
 }
 

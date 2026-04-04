@@ -123,6 +123,19 @@ class VideoProcessor:
                 self._pending_face_results[track_id] = face_result
                 self._face_in_progress.discard(track_id)
 
+            # Atualizar dados demográficos para o dashboard/gráficos
+            if track_id in self.demographics:
+                demo = self.demographics[track_id]
+                if face_result.genero and face_result.genero != 'Unknown':
+                    demo['genders'].append(face_result.genero)
+                if face_result.idade_categoria and face_result.idade_categoria != 'Desconhecido':
+                    demo['ages'].append(face_result.idade_categoria)
+                
+                # Consolidar se tivermos amostras
+                if demo['final_g'] is None and len(demo['genders']) >= 1:
+                    demo['final_g'] = self._mode(demo['genders'])
+                    demo['final_a'] = self._mode(demo['ages'])
+
             # Se identificou alguém, acionar o security engine
             if face_result.pessoa_id is not None:
                 storage.update_ultima_aparicao(face_result.pessoa_id)
@@ -187,39 +200,6 @@ class VideoProcessor:
     #  Helpers de Demografia Legada
     # ══════════════════════════════════════════════
 
-    def _predict_demographics(self, image_crop):
-        """Usa DeepFace para estimar gênero e idade."""
-        if image_crop.size == 0:
-            return None, None
-        try:
-            from deepface import DeepFace
-            results = DeepFace.analyze(
-                img_path=image_crop,
-                actions=['age', 'gender'],
-                enforce_detection=False,
-                silent=True
-            )
-            res = results[0] if isinstance(results, list) else results
-            dom_g = res.get('dominant_gender')
-            if dom_g == 'Man':
-                gender = 'Male'
-            elif dom_g == 'Woman':
-                gender = 'Female'
-            else:
-                gender = 'Unknown'
-            deep_age = res.get('age', 0)
-            if deep_age <= 12:
-                age_cat = '(8-12)'
-            elif deep_age <= 32:
-                age_cat = '(25-32)'
-            elif deep_age <= 53:
-                age_cat = '(38-43)'
-            else:
-                age_cat = '(60-100)'
-            return gender, age_cat
-        except Exception:
-            return None, None
-
     @staticmethod
     def _mode(lst):
         """Retorna o elemento mais frequente de uma lista."""
@@ -236,6 +216,13 @@ class VideoProcessor:
         if getattr(self, 'mirror_camera', False):
             frame = cv2.flip(frame, 1)
 
+        # ── Frame Skipping: Processar apenas 1 a cada 2 frames se estiver lento ──
+        # Isso dobra o FPS se a detecção for o gargalo
+        if frame_count % 2 != 0:
+            return frame
+
+        t_start_total = time.time()
+
         h, w = frame.shape[:2]
 
         if self.line_x is None:
@@ -244,12 +231,15 @@ class VideoProcessor:
         clean_frame = frame.copy()
 
         # ── YOLO + ByteTrack (pessoas + veículos) ──
+        t0 = time.time()
         results = self.yolo.track(
             frame, persist=True,
             classes=[0, 2, 3, 5, 7],  # pessoa + car + motorcycle + bus + truck
             verbose=False, tracker="bytetrack.yaml",
-            conf=0.4, iou=0.5, imgsz=480
+            conf=0.35, iou=0.5, imgsz=384
         )
+        t_yolo = time.time() - t0
+        print(f"[PERF] YOLO: {t_yolo:.3f}s | Total: {time.time() - t_start_total:.3f}s")
 
         person_boxes = []
         vehicle_boxes = []
@@ -277,19 +267,13 @@ class VideoProcessor:
                     self.tracked_objects[tid]['positions'].append(cx)
                     demo = self.demographics[tid]
 
-                    # ── Análise demográfica (legado + novo) ──
-                    if self.has_demographics and demo['final_g'] is None and len(demo['genders']) < 3 and (frame_count + tid) % 10 == 0:
+                    # ── Solicitar análise facial/demográfica assíncrona (apenas se ainda não consolidado) ──
+                    if demo['final_g'] is None and (frame_count + tid) % 12 == 0:
                         box_h = y2 - y1
-                        crop_y2 = y1 + int(box_h * 0.55)
+                        crop_y2 = y1 + int(box_h * 0.6)
                         upper_body = clean_frame[max(0, y1):min(h, crop_y2), max(0, x1):min(w, x2)]
 
                         if upper_body.size > 0:
-                            gender, age = self._predict_demographics(upper_body)
-                            if gender and age:
-                                demo['genders'].append(gender)
-                                demo['ages'].append(age)
-
-                            # ── Submeter para análise facial avançada (embedding + matching) ──
                             with self._async_results_lock:
                                 if tid not in self._face_in_progress:
                                     self._face_in_progress.add(tid)
@@ -306,14 +290,15 @@ class VideoProcessor:
                         demo['final_g'] = self._mode(demo['genders'])
                         demo['final_a'] = self._mode(demo['ages'])
 
-                    # ── Lógica da Linha Virtual ──
+                    # ── Lógica da Linha Virtual (INSTANTÂNEA) ──
                     obj = self.tracked_objects[tid]
-                    if not obj['counted'] and len(obj['positions']) >= 3:
-                        first_x = obj['positions'][0]
+                    if not obj['counted'] and len(obj['positions']) >= 2:
+                        # Usar as duas últimas posições para detectar o cruzamento imediato
+                        prev_x = obj['positions'][-2]
                         evento = None
-
-                        is_entry = (first_x < self.line_x and cx >= self.line_x)
-                        is_exit = (first_x > self.line_x and cx <= self.line_x)
+                        
+                        is_entry = (prev_x < self.line_x and cx >= self.line_x)
+                        is_exit = (prev_x > self.line_x and cx <= self.line_x)
 
                         if getattr(self, 'swap_direction', False):
                             is_entry, is_exit = is_exit, is_entry
@@ -407,7 +392,8 @@ class VideoProcessor:
 
         # ── Submeter veículos para ALPR (throttled) ──
         current_time = time.time()
-        if vehicle_boxes and not self._alpr_in_progress and (current_time - self._last_alpr_time > 2.0):
+        # Intervalo de 0.7s para capturar placas em movimento
+        if vehicle_boxes and not self._alpr_in_progress and (current_time - self._last_alpr_time > 0.7):
             with self._async_results_lock:
                 self._alpr_in_progress = True
                 self._last_alpr_time = current_time
@@ -479,6 +465,10 @@ class VideoProcessor:
             banner_y = h - 50 - (i * 35)
             cv2.rectangle(frame, (10, banner_y - 22), (w - 10, banner_y + 5), bg_color, -1)
             cv2.putText(frame, f"  {desc}", (15, banner_y), cv2.FONT_HERSHEY_SIMPLEX, 0.45, text_color, 1, cv2.LINE_AA)
+
+        total_time = time.time() - t_start_total
+        if total_time > 0.15 or frame_count % 30 == 0:
+            print(f"[PERF] FPS: {self.fps:.1f} | Total: {total_time:.3f}s (YOLO: {t_yolo:.3f}s)")
 
         return frame
 

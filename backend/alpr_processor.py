@@ -172,18 +172,18 @@ class ALPRProcessor:
         if box_h < 30 or box_w < 50:
             return None
 
-        # Pegar 40% inferior (região da placa)
-        crop_y1 = y1 + int(box_h * 0.6)
+        # Pegar 50% inferior (região da placa)
+        crop_y1 = y1 + int(box_h * 0.5)
         plate_crop = frame[crop_y1:y2, x1:x2]
 
         return plate_crop
 
     def _preprocess_for_ocr(self, region):
         """Pré-processamento do crop da placa para melhorar leitura do OCR."""
-        # Redimensionar para tamanho mínimo
+        # Redimensionar para tamanho ideal para OCR
         h, w = region.shape[:2]
-        if w < 200:
-            scale = 200 / w
+        if w < 350:
+            scale = 350 / w
             region = cv2.resize(region, None, fx=scale, fy=scale, interpolation=cv2.INTER_CUBIC)
 
         # Converter para grayscale
@@ -193,15 +193,15 @@ class ALPRProcessor:
         clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(4, 4))
         enhanced = clahe.apply(gray)
 
-        # Leve desfoque para suavizar ruído
-        blurred = cv2.GaussianBlur(enhanced, (3, 3), 0)
+        # Leve desfoque apenas se imagem for ruidosa
+        blurred = cv2.medianBlur(enhanced, 3)
 
-        # Binarização adaptativa
+        # Binarização adaptativa leve
         binary = cv2.adaptiveThreshold(
             blurred, 255,
             cv2.ADAPTIVE_THRESH_GAUSSIAN_C,
             cv2.THRESH_BINARY,
-            11, 2
+            15, 8
         )
 
         return binary
