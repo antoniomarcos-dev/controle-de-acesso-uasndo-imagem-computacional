@@ -57,6 +57,9 @@ def parse_camera_arg():
             CAMERA_SOURCE = env_cam
         print(f"[CONFIG] Camera via env: {CAMERA_SOURCE}")
 
+# Executa a configuração da câmera independentemente de como o script foi iniciado
+parse_camera_arg()
+
 
 @contextlib.asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -398,8 +401,6 @@ def shutdown_server(background_tasks: BackgroundTasks):
 # ══════════════════════════════════════════════
 
 if __name__ == "__main__":
-    parse_camera_arg()
-
     print()
     print("=" * 60)
     print("  CERES SECURITY AI — Sistema de Segurança Integrada")
@@ -412,4 +413,4 @@ if __name__ == "__main__":
     print("    python -m backend.main --camera 2   (outro dispositivo)")
     print("=" * 60)
     print()
-    uvicorn.run("backend.main:app", host="0.0.0.0", port=8000, reload=False)
+    uvicorn.run(app, host="0.0.0.0", port=8000)
