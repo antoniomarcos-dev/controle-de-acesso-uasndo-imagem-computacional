@@ -58,6 +58,8 @@ class SecurityEngine:
             "total_amarelo": 0,
             "total_vermelho": 0
         }
+        self._recent_decisions = {}
+        self._decision_ttl = 8
 
     # ══════════════════════════════════════════════
     #  Modo de Operação
@@ -276,27 +278,34 @@ class SecurityEngine:
 
         # ── Decidir ação ──
         acao, nivel_final, descricao = self.decidir_acao(alert_pessoa, alert_veiculo)
+        should_register = self._should_register_event(
+            pessoa_id=pessoa_id,
+            placa=placa,
+            nivel=nivel_final.value,
+            descricao=descricao
+        )
 
         # ── Emitir log colorido no console ──
         self._emitir_log_console(nivel_final, descricao, acao, pessoa_id, placa)
 
         # ── Persistir registro de acesso no banco ──
         veiculo_id = alert_veiculo.veiculo_id if alert_veiculo else None
-        storage.log_registro_acesso(
-            tipo='passagem',
-            modo_operacao=self.get_modo().value,
-            pessoa_id=pessoa_id,
-            veiculo_id=veiculo_id,
-            nivel_alerta=nivel_final.value,
-            detalhes_alerta=descricao,
-            confianca_facial=confianca_facial,
-            placa_detectada=placa,
-            acao_tomada=acao.value,
-            localizacao=localizacao
-        )
+        if should_register:
+            storage.log_registro_acesso(
+                tipo='passagem',
+                modo_operacao=self.get_modo().value,
+                pessoa_id=pessoa_id,
+                veiculo_id=veiculo_id,
+                nivel_alerta=nivel_final.value,
+                detalhes_alerta=descricao,
+                confianca_facial=confianca_facial,
+                placa_detectada=placa,
+                acao_tomada=acao.value,
+                localizacao=localizacao
+            )
 
         # ── Persistir alerta se não for verde ──
-        if nivel_final != NivelAlerta.VERDE:
+        if should_register and nivel_final != NivelAlerta.VERDE:
             tipo_alerta = None
             if alert_pessoa and alert_pessoa.tipo:
                 tipo_alerta = alert_pessoa.tipo.value
@@ -312,7 +321,8 @@ class SecurityEngine:
             )
 
         # ── Atualizar stats e cache de alertas recentes ──
-        self.stats[f"total_{nivel_final.value}"] += 1
+        if should_register:
+            self.stats[f"total_{nivel_final.value}"] += 1
 
         with self.alertas_lock:
             self.alertas_recentes.append({
@@ -334,6 +344,28 @@ class SecurityEngine:
             "veiculo_id": veiculo_id,
             "placa": placa
         }
+
+    def _should_register_event(self, pessoa_id=None, placa=None, nivel='verde', descricao=""):
+        """
+        Evita registrar múltiplos eventos idênticos em sequência curta.
+        """
+        key = (
+            pessoa_id if pessoa_id is not None else "anon",
+            (placa or "").upper(),
+            nivel,
+            descricao
+        )
+        now = time.time()
+        with self._lock:
+            last_time = self._recent_decisions.get(key)
+            self._recent_decisions = {
+                k: v for k, v in self._recent_decisions.items()
+                if now - v <= self._decision_ttl
+            }
+            if last_time and now - last_time < self._decision_ttl:
+                return False
+            self._recent_decisions[key] = now
+        return True
 
     # ══════════════════════════════════════════════
     #  Cancela Virtual (Modo Evento)

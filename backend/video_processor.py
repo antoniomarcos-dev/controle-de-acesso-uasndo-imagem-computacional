@@ -57,6 +57,7 @@ class VideoProcessor:
         self.latest_frame = None
         self.frame_lock = threading.Lock()
         self.fps = 0
+        self._last_perf_log = 0.0
 
         # Configuração dinâmica
         self.mirror_camera = False
@@ -151,6 +152,7 @@ class VideoProcessor:
 
         except Exception as e:
             print(f"[VISION] Erro no callback facial: {e}")
+        finally:
             with self._async_results_lock:
                 self._face_in_progress.discard(track_id)
 
@@ -239,7 +241,6 @@ class VideoProcessor:
             conf=0.35, iou=0.5, imgsz=384
         )
         t_yolo = time.time() - t0
-        print(f"[PERF] YOLO: {t_yolo:.3f}s | Total: {time.time() - t_start_total:.3f}s")
 
         person_boxes = []
         vehicle_boxes = []
@@ -467,7 +468,8 @@ class VideoProcessor:
             cv2.putText(frame, f"  {desc}", (15, banner_y), cv2.FONT_HERSHEY_SIMPLEX, 0.45, text_color, 1, cv2.LINE_AA)
 
         total_time = time.time() - t_start_total
-        if total_time > 0.15 or frame_count % 30 == 0:
+        if total_time > 0.15 or (time.time() - self._last_perf_log) > 2.0:
+            self._last_perf_log = time.time()
             print(f"[PERF] FPS: {self.fps:.1f} | Total: {total_time:.3f}s (YOLO: {t_yolo:.3f}s)")
 
         return frame

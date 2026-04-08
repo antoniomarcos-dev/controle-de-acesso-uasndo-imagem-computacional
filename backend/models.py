@@ -3,7 +3,7 @@ Modelos Pydantic para a API do Sistema de Segurança Integrada.
 """
 
 from pydantic import BaseModel, Field
-from typing import Optional, List
+from typing import Optional, List, Union
 from datetime import datetime
 from enum import Enum
 
@@ -44,7 +44,7 @@ class ConfigPayload(BaseModel):
     mirror_camera: bool
     swap_direction: bool
     face_conf_threshold: float
-    camera_source: Optional[int] = None
+    camera_source: Optional[Union[int, str]] = None
 
 
 class ModoPayload(BaseModel):
