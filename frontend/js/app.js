@@ -479,6 +479,16 @@ function closeSettings() {
     modalSettings.classList.remove('show');
 }
 
+function parseCameraSource(value) {
+    const cleaned = String(value ?? '').trim();
+    if (!cleaned) return null;
+    const parsed = Number.parseInt(cleaned, 10);
+    if (!Number.isNaN(parsed) && String(parsed) === cleaned) {
+        return parsed;
+    }
+    return cleaned;
+}
+
 if (btnSettings) {
     btnSettings.addEventListener('click', openSettings);
     btnCloseSettings.addEventListener('click', closeSettings);
@@ -492,10 +502,11 @@ if (btnSettings) {
 
     btnSaveSettings.addEventListener('click', () => {
         btnSaveSettings.textContent = "Salvando...";
+        const cameraSource = parseCameraSource(confCamera.value);
         const payload = {
             mirror_camera: confMirror.checked,
             swap_direction: confSwap.checked,
-            camera_source: parseInt(confCamera.value),
+            camera_source: cameraSource,
             face_conf_threshold: parseInt(confFace.value) / 100
         };
         fetch('/api/config', {

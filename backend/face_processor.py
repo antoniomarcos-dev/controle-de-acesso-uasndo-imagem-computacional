@@ -177,7 +177,9 @@ class FaceProcessor:
         if threshold is None:
             threshold = self.match_threshold
 
-        if not embedding:
+        if embedding is None:
+            return None, None, 0.0
+        if isinstance(embedding, (list, tuple)) and len(embedding) == 0:
             return None, None, 0.0
 
         target = np.array(embedding)
