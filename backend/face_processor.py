@@ -22,7 +22,7 @@ except ImportError:
 class FaceProcessor:
     """Motor de reconhecimento e análise facial avançada."""
 
-    AGE_BUCKETS = ['(0-2)', '(4-6)', '(8-12)', '(15-20)', '(25-32)', '(38-43)', '(48-53)', '(60-100)']
+
 
     def __init__(self, match_threshold=0.68):
         self.match_threshold = match_threshold

@@ -4,6 +4,9 @@ uvicorn>=0.23.0
 python-multipart
 python-dotenv
 
+# ═══ Rede e APIs Externas ═══
+requests>=2.30.0
+
 # ═══ Visão Computacional ═══
 ultralytics>=8.0.0
 opencv-python>=4.8.0
@@ -18,10 +21,7 @@ deepface
 easyocr>=1.7.0
 
 # ═══ Banco de Dados ═══
-psycopg2-binary>=2.9.0
+psycopg[binary]>=3.1.0
 
 # ═══ Utilitários ═══
-pandas
 Pillow>=10.0.0
-tqdm>=4.30.0
-gdown>=3.10.1

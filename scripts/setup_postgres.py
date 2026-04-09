@@ -8,8 +8,7 @@ Uso:
 
 import os
 import sys
-import psycopg2
-from psycopg2.extensions import ISOLATION_LEVEL_AUTOCOMMIT
+import psycopg
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -21,17 +20,18 @@ DB_USER = os.getenv("DB_USER", "postgres")
 DB_PASSWORD = os.getenv("DB_PASSWORD", "postgres")
 
 
+def _conninfo(dbname=None):
+    """Monta connection string."""
+    db = dbname or DB_NAME
+    return f"host={DB_HOST} port={DB_PORT} dbname={db} user={DB_USER} password={DB_PASSWORD}"
+
+
 def setup_database():
     """Cria o banco de dados e todas as tabelas necessárias."""
     try:
         # ── Criar banco de dados se não existir ──
         print("[SETUP] Conectando ao cluster PostgreSQL...")
-        conn = psycopg2.connect(
-            host=DB_HOST, port=DB_PORT,
-            user=DB_USER, password=DB_PASSWORD,
-            dbname="postgres"
-        )
-        conn.set_isolation_level(ISOLATION_LEVEL_AUTOCOMMIT)
+        conn = psycopg.connect(_conninfo("postgres"), autocommit=True)
         cur = conn.cursor()
 
         cur.execute(f"SELECT 1 FROM pg_catalog.pg_database WHERE datname = '{DB_NAME}'")
@@ -47,11 +47,7 @@ def setup_database():
 
         # ── Conectar ao banco e criar tabelas ──
         print(f"[SETUP] Conectando no banco '{DB_NAME}'...")
-        conn = psycopg2.connect(
-            host=DB_HOST, port=DB_PORT,
-            user=DB_USER, password=DB_PASSWORD,
-            dbname=DB_NAME
-        )
+        conn = psycopg.connect(_conninfo())
         cur = conn.cursor()
 
         print("[SETUP] Criando schema completo...")

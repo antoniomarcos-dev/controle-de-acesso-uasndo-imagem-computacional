@@ -31,10 +31,15 @@ models/*.pb
 models/*.caffemodel
 models/*.prototxt
 models/*.pbtxt
-backend/models_data/
 *.pt
 runs/
 
 # Logs and OS files
 *.log
 .DS_Store
+
+
+ROADMAP.md
+implementation_plan.md
+
+

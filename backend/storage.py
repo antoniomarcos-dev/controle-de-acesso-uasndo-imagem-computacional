@@ -5,13 +5,15 @@ Gerencia todas as operações de banco de dados:
 - Tabela events (legado, mantida para compatibilidade)
 - Tabelas novas: pessoas, veiculos, registros_acesso, alertas_justica
 - Cache em memória para dashboard de alta performance
+
+Utiliza psycopg v3 (compatível com Windows sem bugs de encoding).
 """
 
 import os
 import datetime
 import threading
-import psycopg2
-from psycopg2.extras import RealDictCursor
+import psycopg
+from psycopg.rows import dict_row
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -39,17 +41,16 @@ _analyzed_ids = set()
 #  Conexão ao Banco
 # ══════════════════════════════════════════════
 
+def _build_conninfo():
+    """Monta a string de conexão para o PostgreSQL."""
+    return f"host={DB_HOST} port={DB_PORT} dbname={DB_NAME} user={DB_USER} password={DB_PASSWORD}"
+
+
 def get_db_connection():
     """Cria uma conexão ao PostgreSQL."""
     try:
-        return psycopg2.connect(
-            host=DB_HOST,
-            port=DB_PORT,
-            user=DB_USER,
-            password=DB_PASSWORD,
-            dbname=DB_NAME
-        )
-    except psycopg2.OperationalError as e:
+        return psycopg.connect(_build_conninfo())
+    except psycopg.OperationalError as e:
         print(f"[STORAGE ERRO CRÍTICO] Falha ao conectar no PostgreSQL. Detalhes: {e}")
         return None
 
@@ -196,7 +197,7 @@ def _reload_cache():
         return
 
     try:
-        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+        with conn.cursor(row_factory=dict_row) as cur:
             cur.execute("SELECT timestamp, event_type, person_id, gender, age FROM events ORDER BY timestamp ASC")
             rows = cur.fetchall()
 
@@ -362,7 +363,7 @@ def create_pessoa(nome, cpf=None, genero=None, idade_estimada=None,
         pid = result[0] if result else None
         print(f"[STORAGE] Pessoa cadastrada: {nome} (ID: {pid})")
         return pid
-    except psycopg2.errors.UniqueViolation:
+    except psycopg.errors.UniqueViolation:
         conn.rollback()
         print(f"[STORAGE] CPF {cpf} já existe no cadastro.")
         return None
@@ -380,7 +381,7 @@ def get_pessoa_by_id(pessoa_id):
     if not conn:
         return None
     try:
-        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+        with conn.cursor(row_factory=dict_row) as cur:
             cur.execute("SELECT * FROM pessoas WHERE id = %s", (pessoa_id,))
             return cur.fetchone()
     except Exception as e:
@@ -396,7 +397,7 @@ def get_all_pessoas():
     if not conn:
         return []
     try:
-        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+        with conn.cursor(row_factory=dict_row) as cur:
             cur.execute("SELECT id, nome, cpf, genero, idade_estimada, status_judicial, tem_mandado, ultima_aparicao FROM pessoas ORDER BY nome")
             return cur.fetchall()
     except Exception as e:
@@ -412,7 +413,7 @@ def get_all_pessoas_with_embeddings():
     if not conn:
         return []
     try:
-        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+        with conn.cursor(row_factory=dict_row) as cur:
             cur.execute("SELECT id, nome, embedding FROM pessoas WHERE embedding IS NOT NULL")
             return cur.fetchall()
     except Exception as e:
@@ -447,7 +448,7 @@ def update_ultima_aparicao(pessoa_id):
 def create_veiculo(placa, modelo=None, cor=None, proprietario_id=None,
                     pendencias_detran=None, ipva_atrasado=False,
                     status_roubo=False, licenciamento_atrasado=False):
-    """Cadastra um novo veículo no banco."""
+    """Cadastra ou atualiza um veículo no banco (UPSERT)."""
     conn = get_db_connection()
     if not conn:
         return None
@@ -456,8 +457,16 @@ def create_veiculo(placa, modelo=None, cor=None, proprietario_id=None,
             cur.execute("""
                 INSERT INTO veiculos (placa, modelo, cor, proprietario_id,
                                       pendencias_detran, ipva_atrasado,
-                                      status_roubo, licenciamento_atrasado)
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+                                      status_roubo, licenciamento_atrasado,
+                                      atualizado_em)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, CURRENT_TIMESTAMP)
+                ON CONFLICT (placa) DO UPDATE SET
+                    modelo = EXCLUDED.modelo,
+                    cor = EXCLUDED.cor,
+                    ipva_atrasado = EXCLUDED.ipva_atrasado,
+                    status_roubo = EXCLUDED.status_roubo,
+                    licenciamento_atrasado = EXCLUDED.licenciamento_atrasado,
+                    atualizado_em = CURRENT_TIMESTAMP
                 RETURNING id
             """, (placa.upper(), modelo, cor, proprietario_id,
                   pendencias_detran, ipva_atrasado,
@@ -465,15 +474,11 @@ def create_veiculo(placa, modelo=None, cor=None, proprietario_id=None,
             result = cur.fetchone()
         conn.commit()
         vid = result[0] if result else None
-        print(f"[STORAGE] Veículo cadastrado: {placa.upper()} (ID: {vid})")
+        print(f"[STORAGE] Veículo atualizado/cadastrado via API: {placa.upper()} (ID: {vid})")
         return vid
-    except psycopg2.errors.UniqueViolation:
-        conn.rollback()
-        print(f"[STORAGE] Placa {placa} já existe no cadastro.")
-        return None
     except Exception as e:
         conn.rollback()
-        print(f"[STORAGE ERRO] Erro ao cadastrar veículo: {e}")
+        print(f"[STORAGE ERRO] Erro ao cadastrar/atualizar veículo: {e}")
         return None
     finally:
         conn.close()
@@ -485,7 +490,7 @@ def get_veiculo_by_placa(placa):
     if not conn:
         return None
     try:
-        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+        with conn.cursor(row_factory=dict_row) as cur:
             cur.execute("SELECT * FROM veiculos WHERE placa = %s", (placa.upper(),))
             return cur.fetchone()
     except Exception as e:
@@ -501,7 +506,7 @@ def get_all_veiculos():
     if not conn:
         return []
     try:
-        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+        with conn.cursor(row_factory=dict_row) as cur:
             cur.execute("SELECT * FROM veiculos ORDER BY placa")
             return cur.fetchall()
     except Exception as e:
@@ -545,7 +550,7 @@ def get_registros_acesso(limit=50, offset=0):
     if not conn:
         return []
     try:
-        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+        with conn.cursor(row_factory=dict_row) as cur:
             cur.execute(
                 "SELECT * FROM registros_acesso ORDER BY timestamp DESC LIMIT %s OFFSET %s",
                 (limit, offset)
@@ -587,7 +592,7 @@ def get_alertas_ativos(limit=30):
     if not conn:
         return []
     try:
-        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+        with conn.cursor(row_factory=dict_row) as cur:
             cur.execute("""
                 SELECT a.*, p.nome as pessoa_nome, v.placa as veiculo_placa
                 FROM alertas_justica a
@@ -611,7 +616,7 @@ def get_alertas_historico(limit=50, offset=0):
     if not conn:
         return []
     try:
-        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+        with conn.cursor(row_factory=dict_row) as cur:
             cur.execute("""
                 SELECT a.*, p.nome as pessoa_nome, v.placa as veiculo_placa
                 FROM alertas_justica a

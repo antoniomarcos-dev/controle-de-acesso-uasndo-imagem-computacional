@@ -156,6 +156,78 @@ class ALPRProcessor:
 
         return results
 
+    def scan_full_frame(self, frame):
+        """
+        Escaneia o frame inteiro em busca de placas, sem depender de detecção de veículos.
+        Útil para detectar placas em qualquer contexto (celular, imagem, etc.).
+        """
+        if not self._lazy_init() or self.reader is None:
+            return []
+
+        results = []
+        current_time = time.time()
+        h, w = frame.shape[:2]
+
+        # Pré-processar o frame inteiro
+        processed = self._preprocess_for_ocr(frame)
+
+        try:
+            ocr_results = self.reader.readtext(
+                processed,
+                detail=1,
+                paragraph=False,
+                allowlist='ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789',
+                min_size=10,
+                width_ths=0.8
+            )
+        except Exception as e:
+            print(f"[ALPR] Erro no scan do frame: {e}")
+            return []
+
+        for (bbox_ocr, text, confidence) in ocr_results:
+            if confidence < self.ocr_threshold:
+                continue
+
+            cleaned = self._clean_plate_text(text)
+            validated = self._validate_plate(cleaned)
+
+            if validated:
+                # Verificar cache
+                if validated in self._plate_cache:
+                    last_seen = self._plate_cache[validated]
+                    if current_time - last_seen < self._cache_ttl:
+                        continue
+
+                self._plate_cache[validated] = current_time
+
+                # Extrair bbox do OCR result
+                pts = bbox_ocr
+                ox1 = int(min(p[0] for p in pts))
+                oy1 = int(min(p[1] for p in pts))
+                ox2 = int(max(p[0] for p in pts))
+                oy2 = int(max(p[1] for p in pts))
+
+                result = PlateResult(
+                    placa=validated,
+                    confianca=round(confidence, 3),
+                    bbox=[ox1, oy1, ox2, oy2]
+                )
+                results.append(result)
+
+                with self.plates_lock:
+                    self.last_plates.append({
+                        "placa": validated,
+                        "confianca": round(confidence * 100, 1),
+                        "timestamp": time.strftime("%H:%M:%S")
+                    })
+                    if len(self.last_plates) > 20:
+                        self.last_plates = self.last_plates[-20:]
+
+                print(f"[ALPR] ✓ Placa detectada (scan): {validated} (conf: {confidence:.1%})")
+
+        self._cleanup_cache(current_time)
+        return results
+
     def _extract_plate_region(self, frame, x1, y1, x2, y2):
         """Extrai os 40% inferiores do bounding box do veículo (onde a placa normalmente está)."""
         h, w = frame.shape[:2]

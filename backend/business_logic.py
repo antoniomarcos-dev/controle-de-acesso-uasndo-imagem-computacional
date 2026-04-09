@@ -17,12 +17,12 @@ try:
     from backend.models import (
         NivelAlerta, TipoAlerta, AcaoTomada, AlertResult, ModoOperacao
     )
-    from backend import storage
+    from backend import storage, api_veiculos
 except ImportError:
     from .models import (
         NivelAlerta, TipoAlerta, AcaoTomada, AlertResult, ModoOperacao
     )
-    from . import storage
+    from . import storage, api_veiculos
 
 
 # ═══════════════════════════════════════════════
@@ -149,11 +149,27 @@ class SecurityEngine:
                 descricao="Placa não detectada"
             )
 
+        # ── 1. Tentar buscar dados reais na API externa ──
+        # Para otimizar, podemos sempre buscar e atualizar, ou fazer isso só sob demanda.
+        # Aqui, vamos buscar sempre que ler a placa para garantir os dados mais recentes.
+        api_data = api_veiculos.consultar_placa_externa(placa)
+        if api_data:
+            # Temos dados da API. Vamos atualizar/criar o veículo no PostgreSQL local.
+            storage.create_veiculo(
+                placa=placa,
+                modelo=api_data.get('marca_modelo'),
+                cor=api_data.get('cor'),
+                status_roubo=api_data.get('roubo_furtado', False),
+                ipva_atrasado=api_data.get('ipva_atrasado', False),
+                licenciamento_atrasado=api_data.get('licenciamento_atrasado', False)
+            )
+
+        # ── 2. Consultar o banco local (que agora pode ter dados recém-inseridos da API) ──
         veiculo_data = storage.get_veiculo_by_placa(placa)
         if veiculo_data is None:
             return AlertResult(
                 nivel=NivelAlerta.VERDE,
-                descricao=f"Placa {placa} não encontrada no cadastro",
+                descricao=f"Placa {placa} não possui restrições conhecidas",
                 placa=placa
             )
 

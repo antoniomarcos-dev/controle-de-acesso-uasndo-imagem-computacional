@@ -81,12 +81,18 @@ body {
     background: rgba(34, 197, 94, 0.04);
     top: 50%; left: 50%;
     transform: translate(-50%, -50%);
+    animation: glow-float-center 20s ease-in-out infinite;
     animation-delay: -14s;
 }
 @keyframes glow-float {
     0%, 100% { transform: translate(0, 0) scale(1); }
     33% { transform: translate(30px, -20px) scale(1.05); }
     66% { transform: translate(-20px, 15px) scale(0.95); }
+}
+@keyframes glow-float-center {
+    0%, 100% { transform: translate(-50%, -50%) scale(1); }
+    33% { transform: translate(calc(-50% + 30px), calc(-50% - 20px)) scale(1.05); }
+    66% { transform: translate(calc(-50% - 20px), calc(-50% + 15px)) scale(0.95); }
 }
 
 /* ═══ App Container ═══ */
@@ -426,7 +432,6 @@ body {
 }
 
 /* ═══ ALERTS CARD ═══ */
-.alerts-card { }
 .alerts-list {
     max-height: 260px;
     overflow-y: auto;
@@ -469,7 +474,6 @@ body {
 .alert-item-action.apenas_registro { background: rgba(255,255,255,0.05); color: var(--text-muted); }
 
 /* ═══ TIMELINE ═══ */
-.timeline-card { }
 .timeline-list {
     max-height: 260px;
     overflow-y: auto;
@@ -608,6 +612,7 @@ input:checked + .slider::before { transform: translateX(18px); background: white
 /* Range Slider */
 .range-slider {
     -webkit-appearance: none;
+    appearance: none;
     width: 100%; height: 6px;
     background: rgba(255,255,255,0.1);
     border-radius: 3px; outline: none;

@@ -1,27 +1,40 @@
-import psycopg2
-import os
-import sys
+"""
+Script para resetar todos os dados do banco de dados.
+Usa as mesmas variáveis de ambiente do sistema principal (.env).
+"""
 
-URL = os.environ.get("DATABASE_URL", "postgresql://postgres:postgres@localhost:5432/prefeitura_ceres")
+import os
+import psycopg
+from dotenv import load_dotenv
+
+load_dotenv()
+
+DB_HOST = os.getenv("DB_HOST", "localhost")
+DB_PORT = os.getenv("DB_PORT", "5432")
+DB_NAME = os.getenv("DB_NAME", "prefeitura_ceres")
+DB_USER = os.getenv("DB_USER", "postgres")
+DB_PASSWORD = os.getenv("DB_PASSWORD", "postgres")
 
 try:
-    conn = psycopg2.connect(URL)
-    conn.autocommit = True
-    cursor = conn.cursor()
-    
+    conn = psycopg.connect(
+        f"host={DB_HOST} port={DB_PORT} dbname={DB_NAME} user={DB_USER} password={DB_PASSWORD}",
+        autocommit=True
+    )
+    cur = conn.cursor()
+
     # Truncar todas as tabelas e reiniciar sequences
-    tables = ['registros_acesso', 'alertas_justica', 'pessoas', 'veiculos', 'events']
-    
+    tables = ['registros_acesso', 'alertas_justica', 'veiculos', 'pessoas', 'events']
+
     for t in tables:
         try:
-            cursor.execute(f"TRUNCATE TABLE {t} RESTART IDENTITY CASCADE;")
+            cur.execute(f"TRUNCATE TABLE {t} RESTART IDENTITY CASCADE;")
             print(f"Limpa tabela: {t}")
         except Exception as e:
             print(f"Erro ao limpar {t}: {e}")
-            
-    cursor.close()
+
+    cur.close()
     conn.close()
     print("Banco de dados resetado com sucesso (dados de teste removidos).")
-    
+
 except Exception as e:
     print(f"Erro ao conectar ao banco de dados: {e}")

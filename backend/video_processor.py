@@ -92,19 +92,7 @@ class VideoProcessor:
         self._face_in_progress = set()      # track_ids sendo processados
         self._alpr_in_progress = False       # Flag de ALPR em andamento
         self._last_alpr_time = 0             # Timestamp do último ALPR
-
-        # ── DeepFace para demografia legada ──
-        self.has_demographics = True
-        try:
-            from deepface import DeepFace
-            print("[VISION] DeepFace ativado!")
-        except ImportError:
-            self.has_demographics = False
-            print("[VISION] AVISO: DeepFace ausente. Execute: pip install deepface tf-keras")
-
-        # Legado
-        self.AGE_BUCKETS = ['(0-2)', '(4-6)', '(8-12)', '(15-20)', '(25-32)', '(38-43)', '(48-53)', '(60-100)']
-        self.GENDER_LABELS = ['Male', 'Female']
+        self._last_full_scan_time = 0        # Timestamp do último scan completo de placas
 
         # Localização do ponto de monitoramento
         self._location = os.getenv("SYSTEM_LOCATION", "Portaria Principal")
@@ -238,7 +226,7 @@ class VideoProcessor:
             frame, persist=True,
             classes=[0, 2, 3, 5, 7],  # pessoa + car + motorcycle + bus + truck
             verbose=False, tracker="bytetrack.yaml",
-            conf=0.35, iou=0.5, imgsz=384
+            conf=0.55, iou=0.45, imgsz=320
         )
         t_yolo = time.time() - t0
 
@@ -253,6 +241,13 @@ class VideoProcessor:
 
             for box, tid, conf, cls in zip(boxes, ids, confs, classes):
                 x1, y1, x2, y2 = map(int, box)
+                box_w = x2 - x1
+                box_h = y2 - y1
+
+                # Filtrar detecções muito pequenas (falsos positivos)
+                if box_w < 40 or box_h < 40:
+                    continue
+
                 cx = (x1 + x2) // 2
                 cy = (y1 + y2) // 2
 
@@ -268,13 +263,17 @@ class VideoProcessor:
                     self.tracked_objects[tid]['positions'].append(cx)
                     demo = self.demographics[tid]
 
-                    # ── Solicitar análise facial/demográfica assíncrona (apenas se ainda não consolidado) ──
-                    if demo['final_g'] is None and (frame_count + tid) % 12 == 0:
-                        box_h = y2 - y1
-                        crop_y2 = y1 + int(box_h * 0.6)
+                    # ── Solicitar análise facial/demográfica assíncrona ──
+                    # Enviar a cada 4 frames processados OU imediatamente na primeira detecção
+                    should_analyze = demo['final_g'] is None and (
+                        len(demo['genders']) == 0 or (frame_count + tid) % 4 == 0
+                    )
+                    if should_analyze:
+                        person_h = y2 - y1
+                        crop_y2 = y1 + int(person_h * 0.6)
                         upper_body = clean_frame[max(0, y1):min(h, crop_y2), max(0, x1):min(w, x2)]
 
-                        if upper_body.size > 0:
+                        if upper_body.size > 0 and upper_body.shape[0] > 20 and upper_body.shape[1] > 20:
                             with self._async_results_lock:
                                 if tid not in self._face_in_progress:
                                     self._face_in_progress.add(tid)
@@ -286,8 +285,8 @@ class VideoProcessor:
                                         lambda f, t=tid: self._on_face_result(t, f)
                                     )
 
-                    # ── Consolidar após 3+ amostras ──
-                    if demo['final_g'] is None and len(demo['genders']) >= 3:
+                    # ── Consolidar após 1+ amostra (resultado rápido) ──
+                    if demo['final_g'] is None and len(demo['genders']) >= 1:
                         demo['final_g'] = self._mode(demo['genders'])
                         demo['final_a'] = self._mode(demo['ages'])
 
@@ -402,6 +401,17 @@ class VideoProcessor:
             vb_copy = [b.copy() for b in vehicle_boxes]
             future = self.alpr_executor.submit(
                 self.alpr_processor.detect_plates, frame_copy, vb_copy
+            )
+            future.add_done_callback(self._on_alpr_result)
+
+        # ── Scan periódico do frame inteiro para placas (quando não há veículos) ──
+        elif not self._alpr_in_progress and (current_time - self._last_full_scan_time > 3.0):
+            with self._async_results_lock:
+                self._alpr_in_progress = True
+                self._last_full_scan_time = current_time
+            frame_copy = clean_frame.copy()
+            future = self.alpr_executor.submit(
+                self.alpr_processor.scan_full_frame, frame_copy
             )
             future.add_done_callback(self._on_alpr_result)
 
@@ -542,13 +552,13 @@ class VideoProcessor:
                         cv2.FONT_HERSHEY_SIMPLEX, 0.4, (120, 120, 120), 1, cv2.LINE_AA)
 
             # Codificar e distribuir
-            ret_encode, buffer = cv2.imencode('.jpg', out_frame, [int(cv2.IMWRITE_JPEG_QUALITY), 80])
+            ret_encode, buffer = cv2.imencode('.jpg', out_frame, [int(cv2.IMWRITE_JPEG_QUALITY), 65])
             if ret_encode:
                 with self.frame_lock:
                     self.latest_frame = buffer.tobytes()
 
         cap.release()
-        cv2.destroyAllWindows()
+
 
     def start(self):
         if not self.running:
